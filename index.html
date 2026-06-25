@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de nodos: soberanía del agua</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root {
+    --bg: #0d0a10;
+    --panel-bg: #1a1620;
+    --border: #2e2836;
+    --text: #e8e4ea;
+    --text-secondary: #8b8593;
+    --text-tertiary: #5c5664;
+    --line: #3a3442;
+    --accent: #e85fc4;
+    --accent-dim: #6b3d5e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 28px 32px 16px;
+    max-width: 880px;
+  }
+  h1 {
+    font-family: 'Source Serif 4', serif;
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--text);
+  }
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin: 0;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+
+  .legend {
+    display: flex; gap: 22px; margin-top: 20px; font-size: 11px; color: var(--text-tertiary);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  #canvas-wrap {
+    overflow: auto;
+    width: 100%;
+    height: calc(100vh - 130px);
+    background: var(--bg);
+  }
+  svg { display: block; }
+
+  .node-shape { cursor: pointer; transition: opacity 0.2s ease; }
+  .node-shape.dimmed { opacity: 0.2; }
+
+  .node-circle {
+    fill: var(--bg);
+    stroke-width: 1;
+    transition: stroke-width 0.2s ease, fill 0.2s ease;
+  }
+  .node-shape:hover .node-circle { stroke-width: 1.6; }
+
+  .node-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    fill: var(--text);
+    text-anchor: middle;
+    letter-spacing: 0.01em;
+  }
+  .node-sublabel {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    fill: var(--text-tertiary);
+    text-anchor: middle;
+  }
+
+  .edge {
+    stroke: var(--line);
+    stroke-width: 1;
+    fill: none;
+    transition: stroke 0.2s ease, stroke-width 0.2s ease, opacity 0.2s ease;
+  }
+  .edge.dimmed { opacity: 0.1; }
+  .edge.active { stroke: var(--accent); stroke-width: 1.2; }
+
+  #panel {
+    position: fixed;
+    top: 0; right: -380px;
+    width: 360px;
+    height: 100%;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border);
+    padding: 36px 30px;
+    overflow-y: auto;
+    transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  #panel.open { right: 0; }
+  #panel h2 {
+    font-family: 'Source Serif 4', serif;
+    font-size: 18px; font-weight: 600; margin: 0 0 6px; color: var(--text);
+  }
+  #panel .ptype {
+    font-size: 10px; color: var(--text-tertiary); margin: 0 0 22px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #panel p.body {
+    font-family: 'Source Serif 4', serif;
+    font-size: 15px; color: #c4bfca; line-height: 1.7; margin: 0 0 26px;
+  }
+  #panel .section-label {
+    font-size: 10px; color: var(--text-tertiary); margin: 0 0 12px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #panel .conn-item {
+    display: block; width: 100%; text-align: left;
+    background: none; border: none; border-bottom: 1px solid var(--border);
+    padding: 11px 0; margin: 0; font-size: 12px; cursor: pointer; color: var(--text-secondary);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  #panel .conn-item:hover { color: var(--accent); }
+  #close-panel {
+    background: none; border: none;
+    padding: 0; font-size: 11px; cursor: pointer; color: var(--text-tertiary);
+    margin-bottom: 28px; font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+  #close-panel:hover { color: var(--text); }
+  .status-badge {
+    display: inline-block; font-size: 10px; color: var(--accent);
+    border: 1px solid var(--accent-dim); padding: 4px 10px; margin-bottom: 22px;
+    font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.03em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Extranjerización y blindaje jurídico sobre recursos estratégicos</h1>
+  <p class="subtitle">Mapa exploratorio — Argentina · versión inicial para revisar con Stefano</p>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--text-secondary)"></span>patrón estructural</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span>en movimiento ahora</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--text-tertiary)"></span>organización</div>
+  </div>
+</header>
+
+<div id="canvas-wrap">
+  <svg id="graph" width="1400" height="820" viewBox="0 0 1400 820">
+    <g id="edges"></g>
+    <g id="nodes"></g>
+  </svg>
+</div>
+
+<div id="panel">
+  <button id="close-panel" onclick="closePanel()">&larr; cerrar</button>
+  <div id="panel-content"></div>
+</div>
+
+<script>
+const nodes = [
+  { id: "patron", type: "pattern", x: 700, y: 110, r: 56, hot: false,
+    title: "Extranjerización +", sub: "blindaje jurídico",
+    body: "Un actor extranjero obtiene control o acceso prioritario sobre un recurso estratégico, respaldado por un instrumento legal que blinda ese acceso por un período largo, dificultando que el Estado lo revierta sin demandas o costos políticos.", status: null },
+
+  { id: "aysa", type: "case", x: 230, y: 300, r: 46, hot: false,
+    title: "AySA / Mekorot", sub: "privatización del agua",
+    body: "Privatización del servicio de agua y saneamiento, conectada a la firma israelí Mekorot. Paralelo con Palestina, donde Mekorot también opera el recurso hídrico.", status: "en seguimiento" },
+
+  { id: "rigi", type: "case", x: 500, y: 300, r: 46, hot: true,
+    title: "Súper RIGI", sub: "IA y data centers",
+    body: "Régimen de incentivos con 30 años de estabilidad regulatoria para inversión en IA, litio y data centers. Prioriza agua de refrigeración por sobre necesidades territoriales.", status: "media sanción · 24/6" },
+
+  { id: "tierras", type: "case", x: 780, y: 300, r: 46, hot: false,
+    title: "Tierras Rurales", sub: "Ley 26.737",
+    body: "Tope a propiedad extranjera de tierra rural y prohibición de venta de tierras con agua a extranjeros. Sus artículos clave fueron derogados dentro de la Ley de Propiedad Privada.", status: "artículos derogados" },
+
+  { id: "propiedad", type: "case", x: 1050, y: 300, r: 50, hot: true,
+    title: "Propiedad privada", sub: "ley de inviolabilidad",
+    body: "Modifica expropiaciones, habilita desalojos exprés, y deroga límites a tierra extranjera, incluida la que contiene cuerpos de agua.", status: "dictamen en Senado" },
+
+  { id: "antartida", type: "case", x: 700, y: 460, r: 46, hot: false,
+    title: "Antártida 2048", sub: "Protocolo de Madrid",
+    body: "A partir de 2048 se puede revisar el Protocolo que prohíbe la minería antártica. Concentra el 70% del agua dulce mundial. Reclamo argentino superpuesto con Reino Unido y Chile.", status: "horizonte 2048" },
+
+  { id: "aadeaa", type: "org", x: 380, y: 610, r: 44, hot: false,
+    title: "AADeAA", sub: "Enrique Viale",
+    body: "Asociación Argentina de Abogados Ambientalistas. Litigio, incidencia legislativa y comunicados. Fundada por Enrique Viale en 2004.", status: null },
+
+  { id: "uac", type: "org", x: 660, y: 650, r: 50, hot: false,
+    title: "Unión de Asambleas", sub: "de Comunidades",
+    body: "Red de asambleas territoriales contra el saqueo y la contaminación, con encuentros periódicos en todo el país. 39 encuentros realizados.", status: null },
+
+  { id: "mendoza", type: "org", x: 950, y: 600, r: 44, hot: false,
+    title: "Asambleas de", sub: "Mendoza",
+    body: "Contactos territoriales en Mendoza, seguimiento de leyes provinciales y nacionales relacionadas a tierra y agua.", status: null }
+];
+
+const edges = [
+  ["patron", "aysa"], ["patron", "rigi"], ["patron", "tierras"], ["patron", "propiedad"], ["patron", "antartida"],
+  ["tierras", "propiedad"], ["rigi", "propiedad"], ["aysa", "tierras"],
+  ["aysa", "aadeaa"],
+  ["rigi", "aadeaa"], ["rigi", "uac"],
+  ["tierras", "mendoza"],
+  ["propiedad", "aadeaa"]
+];
+
+const nodeMap = {};
+nodes.forEach(n => nodeMap[n.id] = n);
+
+const nodesG = document.getElementById('nodes');
+const edgesG = document.getElementById('edges');
+
+function strokeFor(n) {
+  if (n.hot) return "var(--accent)";
+  if (n.type === "org") return "var(--text-tertiary)";
+  return "var(--text-secondary)";
+}
+
+function edgePath(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  const ux = dx/dist, uy = dy/dist;
+  return {
+    x1: a.x + ux * (a.r + 2), y1: a.y + uy * (a.r + 2),
+    x2: b.x - ux * (b.r + 2), y2: b.y - uy * (b.r + 2)
+  };
+}
+
+edges.forEach(([fromId, toId], i) => {
+  const a = nodeMap[fromId], b = nodeMap[toId];
+  const p = edgePath(a, b);
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("class", "edge");
+  line.setAttribute("id", "edge-" + i);
+  line.setAttribute("x1", p.x1); line.setAttribute("y1", p.y1);
+  line.setAttribute("x2", p.x2); line.setAttribute("y2", p.y2);
+  edgesG.appendChild(line);
+});
+
+nodes.forEach(n => {
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.setAttribute("class", "node-shape");
+  g.setAttribute("id", "node-" + n.id);
+  g.setAttribute("onclick", `selectNode('${n.id}')`);
+
+  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  circle.setAttribute("class", "node-circle");
+  circle.setAttribute("cx", n.x); circle.setAttribute("cy", n.y); circle.setAttribute("r", n.r);
+  circle.setAttribute("stroke", strokeFor(n));
+  g.appendChild(circle);
+
+  if (n.hot) {
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", n.x + n.r * 0.62);
+    dot.setAttribute("cy", n.y - n.r * 0.62);
+    dot.setAttribute("r", 3.5);
+    dot.setAttribute("fill", "var(--accent)");
+    g.appendChild(dot);
+  }
+
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  title.setAttribute("class", "node-label");
+  title.setAttribute("x", n.x);
+  title.setAttribute("y", n.y - (n.sub ? 4 : 0));
+  title.setAttribute("dominant-baseline", "central");
+  title.textContent = n.title;
+  g.appendChild(title);
+
+  if (n.sub) {
+    const sub = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    sub.setAttribute("class", "node-sublabel");
+    sub.setAttribute("x", n.x);
+    sub.setAttribute("y", n.y + 12);
+    sub.setAttribute("dominant-baseline", "central");
+    sub.textContent = n.sub;
+    g.appendChild(sub);
+  }
+
+  nodesG.appendChild(g);
+});
+
+function selectNode(id) {
+  const n = nodeMap[id];
+
+  document.querySelectorAll('.node-shape').forEach(el => el.classList.add('dimmed'));
+  document.querySelectorAll('.edge').forEach(el => { el.classList.add('dimmed'); el.classList.remove('active'); });
+
+  document.getElementById('node-' + id).classList.remove('dimmed');
+
+  const connectedIds = new Set();
+  edges.forEach(([f, t], i) => {
+    if (f === id || t === id) {
+      const edgeEl = document.getElementById('edge-' + i);
+      edgeEl.classList.remove('dimmed');
+      edgeEl.classList.add('active');
+      connectedIds.add(f === id ? t : f);
+    }
+  });
+  connectedIds.forEach(cid => document.getElementById('node-' + cid).classList.remove('dimmed'));
+
+  const typeLabel = { pattern: 'patrón estructural', org: 'organización', case: 'caso / ley' };
+  let html = `<h2>${n.title}${n.sub ? ' ' + n.sub : ''}</h2><p class="ptype">${typeLabel[n.type]}</p>`;
+  if (n.status) html += `<span class="status-badge">${n.status}</span>`;
+  html += `<p class="body">${n.body}</p>`;
+  if (connectedIds.size > 0) {
+    html += `<p class="section-label">conectado con</p>`;
+    connectedIds.forEach(cid => {
+      const cn = nodeMap[cid];
+      html += `<button class="conn-item" onclick="selectNode('${cid}')">${cn.title}${cn.sub ? ' ' + cn.sub : ''}</button>`;
+    });
+  }
+
+  document.getElementById('panel-content').innerHTML = html;
+  document.getElementById('panel').classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+  document.querySelectorAll('.node-shape').forEach(el => el.classList.remove('dimmed'));
+  document.querySelectorAll('.edge').forEach(el => { el.classList.remove('dimmed'); el.classList.remove('active'); });
+}
+</script>
+
+</body>
+</html>
